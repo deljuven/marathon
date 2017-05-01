@@ -42,13 +42,13 @@ trait Service extends LeaderDirectives with AuthDirectives {
   }
 }
 
-object ApiTest extends App with Service with AppsHandler with BaseHandler with ServiceMocks {
-  implicit val system = ActorSystem()
-  implicit val executor = system.dispatcher
-  implicit val materializer = ActorMaterializer()
+// object ApiTest extends App with Service with AppsHandler with BaseHandler with ServiceMocks {
+//   implicit val system = ActorSystem()
+//   implicit val executor = system.dispatcher
+//   implicit val materializer = ActorMaterializer()
 
-  val allRoutes = decodeRequest(encodeResponse(routes ~ apps))
+//   val allRoutes = decodeRequest(encodeResponse(routes ~ apps))
 
-  // encode response will gzip if needed
-  Http().bindAndHandle(allRoutes, "localhost", 8080)
-}
+//   // encode response will gzip if needed
+//   Http().bindAndHandle(allRoutes, "localhost", 8080)
+// }

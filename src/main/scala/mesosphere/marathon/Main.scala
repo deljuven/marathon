@@ -9,9 +9,10 @@ import com.google.inject.{ Guice, Module }
 import com.typesafe.config.{ Config, ConfigFactory }
 import com.typesafe.scalalogging.StrictLogging
 import kamon.Kamon
-import mesosphere.chaos.http.{ HttpModule, HttpService }
+import mesosphere.chaos.http.HttpModule
 import mesosphere.chaos.metrics.MetricsModule
-import mesosphere.marathon.api.MarathonRestModule
+import mesosphere.marathon.api.{ MarathonHttpService, MarathonRestModule }
+import mesosphere.marathon.api.akkahttp.AkkaHttpModule
 import mesosphere.marathon.core.CoreGuiceModule
 import mesosphere.marathon.core.async.ExecutionContexts
 import mesosphere.marathon.core.base.toRichRuntime
@@ -80,15 +81,23 @@ class MarathonApp(args: Seq[String]) extends AutoCloseable with StrictLogging {
   Kamon.start(config)
 
   val actorSystem = ActorSystem("marathon")
+
+  val jettyModules = Seq(
+    new HttpModule(cliConf),
+    new MarathonRestModule)
+  val akkaHttpModules = Seq(
+    new AkkaHttpModule(cliConf))
+
   protected def modules: Seq[Module] = {
-    Seq(
-      new HttpModule(cliConf),
-      new MetricsModule,
-      new MarathonModule(cliConf, cliConf, actorSystem),
-      new MarathonRestModule,
-      new DebugModule(cliConf),
-      new CoreGuiceModule(config)
-    )
+    // TODO - switch this based on a feature flag!!!
+    // jettyModules ++
+    akkaHttpModules ++
+      Seq(
+        new MetricsModule,
+        new MarathonModule(cliConf, cliConf, actorSystem),
+        new DebugModule(cliConf),
+        new CoreGuiceModule(config)
+      )
   }
   private var serviceManager: Option[ServiceManager] = None
 
@@ -108,8 +117,8 @@ class MarathonApp(args: Seq[String]) extends AutoCloseable with StrictLogging {
     val injector = Guice.createInjector(modules)
     Metrics.start(injector.getInstance(classOf[ActorSystem]))
     val services = Seq(
-      classOf[HttpService],
-      classOf[MarathonSchedulerService]).map(injector.getInstance(_))
+      injector.getInstance(classOf[MarathonHttpService]),
+      injector.getInstance(classOf[MarathonSchedulerService]))
     serviceManager = Some(new ServiceManager(services))
 
     sys.addShutdownHook {

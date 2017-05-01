@@ -2,6 +2,7 @@ package mesosphere.marathon
 package api.akkahttp.v2
 
 import akka.event.EventStream
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
@@ -15,7 +16,7 @@ import mesosphere.marathon.core.base.Clock
 import mesosphere.marathon.core.deployment.DeploymentPlan
 import mesosphere.marathon.core.group.GroupManager
 import mesosphere.marathon.core.plugin.PluginManager
-import mesosphere.marathon.plugin.auth.{ CreateRunSpec, Identity, ViewResource }
+import mesosphere.marathon.plugin.auth.{ CreateRunSpec, Identity, ViewResource, Authenticator, Authorizer }
 import mesosphere.marathon.raml.AppConversion
 import mesosphere.marathon.state.{ AppDefinition, Identifiable, PathId }
 import play.api.libs.json.Json
@@ -23,21 +24,28 @@ import PathId._
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait AppsHandler extends BaseHandler with LeaderDirectives
+class AppsHandler(
+  val clock: Clock,
+  val eventBus: EventStream,
+  val appTasksRes: AppTasksResource,
+  val service: MarathonSchedulerService,
+  val appInfoService: AppInfoService,
+  val config: MarathonConf,
+  val groupManager: GroupManager,
+  val pluginManager: PluginManager)(
+  implicit
+  val actorSystem: ActorSystem,
+  val executionContext: ExecutionContext,
+  val authenticator: Authenticator,
+  val authorizer: Authorizer
+) extends BaseHandler with LeaderDirectives
     with AuthDirectives with AppConversion {
+
+  private implicit lazy val validateApp = AppDefinition.validAppDefinition(config.availableFeatures)(pluginManager)
+  private implicit lazy val updateValidator = AppValidation.validateCanonicalAppUpdateAPI(config.availableFeatures)
 
   import AppsHandler._
   import EntityMarshallers._
-
-  def clock: Clock
-  def eventBus: EventStream
-  def appTasksRes: AppTasksResource
-  def service: MarathonSchedulerService
-  def appInfoService: AppInfoService
-  def config: MarathonConf
-  def groupManager: GroupManager
-  def pluginManager: PluginManager
-  implicit val executor: ExecutionContext
 
   import mesosphere.marathon.api.v2.json.Formats._
 
@@ -61,7 +69,7 @@ trait AppsHandler extends BaseHandler with LeaderDirectives
     }
   }
 
-  val createApp: Route = {
+  private val createApp: Route = {
     def create(app: AppDefinition, force: Boolean)(implicit identity: Identity): Future[(DeploymentPlan, AppInfo)] = {
 
       def createOrThrow(opt: Option[AppDefinition]) = opt
@@ -92,7 +100,7 @@ trait AppsHandler extends BaseHandler with LeaderDirectives
     }
   }
 
-  val showApp: Route = {
+  private val showApp: Route = {
     authenticated { implicit identity =>
       path(RemainingPath) { id =>
         parameters('embed.*) { embed =>
@@ -116,7 +124,7 @@ trait AppsHandler extends BaseHandler with LeaderDirectives
     }
   }
 
-  protected val apps: Route = {
+  val apps: Route = {
     asLeader {
       pathPrefix("v2" / "apps") {
         pathEnd {
@@ -130,8 +138,6 @@ trait AppsHandler extends BaseHandler with LeaderDirectives
   private val normalizationConfig = AppNormalization.Configure(config.defaultNetworkName.get, config.mesosBridgeName())
   private implicit val normalizeApp: Normalization[raml.App] =
     appNormalization(NormalizationConfig(config.availableFeatures, normalizationConfig))(AppNormalization.withCanonizedIds())
-  private implicit lazy val validateApp = AppDefinition.validAppDefinition(config.availableFeatures)(pluginManager)
-  private implicit lazy val updateValidator = AppValidation.validateCanonicalAppUpdateAPI(config.availableFeatures)
 }
 
 object AppsHandler {

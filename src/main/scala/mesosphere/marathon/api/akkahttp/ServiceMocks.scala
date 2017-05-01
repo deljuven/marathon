@@ -21,10 +21,9 @@ import mesosphere.marathon.state._
 
 import scala.concurrent.Future
 
-trait ServiceMocks {
+class ServiceMocks(val system: ActorSystem) {
 
   // required
-  val system: ActorSystem
 
   // provided
 
@@ -65,8 +64,6 @@ trait ServiceMocks {
     }
   }
 
-  def appTasksRes: mesosphere.marathon.api.v2.AppTasksResource = ???
-
   def clock: Clock = Clock()
 
   def config: MarathonConf = AllConf.withTestConfig()
@@ -89,6 +86,4 @@ trait ServiceMocks {
   }
 
   def pluginManager: PluginManager = PluginManager.None
-
-  def service: MarathonSchedulerService = ???
 }
