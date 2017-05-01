@@ -64,8 +64,6 @@ object EntityMarshallers {
   ): ToEntityMarshaller[A] =
     jsonStringMarshaller.compose(printer).compose(writes.writes)
 
-  implicit val fooUnmarshaller = playJsonUnmarshaller[Foo]
-
   import mesosphere.marathon.raml.AppConversion.appRamlReader
   implicit def appUnmarshaller(
     implicit
@@ -73,7 +71,6 @@ object EntityMarshallers {
     validEntityRaml(playJsonUnmarshaller[raml.App])
   }
 
-  implicit val fooMarshaller = playJsonMarshaller[Foo]
   implicit val jsValueMarshaller = playJsonMarshaller[JsValue]
   implicit val wixResultMarshaller = playJsonMarshaller[com.wix.accord.Failure](Validation.failureWrites)
   implicit val messageMarshaller = playJsonMarshaller[BaseHandler.Message]

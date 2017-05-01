@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import mesosphere.marathon.api.v2.{ AppNormalization, AppTasksResource, LabelSelectorParsers, InfoEmbedResolver }
-import mesosphere.marathon.api.akkahttp.{ BaseHandler, LeaderDirectives, AuthDirectives, EntityMarshallers }
+import mesosphere.marathon.api.akkahttp.{ Controller, BaseHandler, LeaderDirectives, AuthDirectives, EntityMarshallers }
 import mesosphere.marathon.api.v2.AppsResource.{ NormalizationConfig, authzSelector }
 import mesosphere.marathon.api.v2.Validation.validateOrThrow
 import mesosphere.marathon.api.v2.validation.AppValidation
@@ -24,7 +24,7 @@ import PathId._
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-class AppsHandler(
+class AppsController(
   val clock: Clock,
   val eventBus: EventStream,
   val appTasksRes: AppTasksResource,
@@ -39,18 +39,18 @@ class AppsHandler(
   val authenticator: Authenticator,
   val authorizer: Authorizer
 ) extends BaseHandler with LeaderDirectives
-    with AuthDirectives with AppConversion {
+    with AuthDirectives with AppConversion with Controller {
 
   private implicit lazy val validateApp = AppDefinition.validAppDefinition(config.availableFeatures)(pluginManager)
   private implicit lazy val updateValidator = AppValidation.validateCanonicalAppUpdateAPI(config.availableFeatures)
 
-  import AppsHandler._
+  import AppsController._
   import EntityMarshallers._
 
   import mesosphere.marathon.api.v2.json.Formats._
 
-  val listApps: Route = {
-    def index(cmd: Option[String], id: Option[String], label: Option[String], embed: Set[String])(implicit identity: Identity): Future[Seq[AppInfo]] = {
+  private def listApps(cmd: Option[String], id: Option[String], label: Option[String], embed: Set[String])(implicit identity: Identity): Route = {
+    def index: Future[Seq[AppInfo]] = {
       def containCaseInsensitive(a: String, b: String): Boolean = b.toLowerCase contains a.toLowerCase
 
       val selectors = Seq[Option[Selector[AppDefinition]]](
@@ -62,15 +62,11 @@ class AppsHandler(
       val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) + AppInfo.Embed.Counts + AppInfo.Embed.Deployments
       appInfoService.selectAppsBy(Selector.forall(selectors), resolvedEmbed)
     }
-    authenticated { implicit identity =>
-      parameters('cmd.?, 'id.?, 'label.?, 'embed.*) { (cmd, id, label, embed) =>
-        onSuccess(index(cmd, id, label, embed.toSet))(apps => complete(Json.obj("apps" -> apps)))
-      }
-    }
+    onSuccess(index)(apps => complete(Json.obj("apps" -> apps)))
   }
 
-  private val createApp: Route = {
-    def create(app: AppDefinition, force: Boolean)(implicit identity: Identity): Future[(DeploymentPlan, AppInfo)] = {
+  private def createApp(app: AppDefinition, force: Boolean)(implicit identity: Identity): Route = {
+    def create: Future[(DeploymentPlan, AppInfo)] = {
 
       def createOrThrow(opt: Option[AppDefinition]) = opt
         .map(_ => throw ConflictingChangeException(s"An app with id [${app.id}] already exists."))
@@ -86,51 +82,52 @@ class AppsHandler(
         plan -> appWithDeployments
       }
     }
-    authenticated { implicit identity =>
-      entity(as[AppDefinition]) { app =>
-        authorized(CreateRunSpec, app, identity) {
-          parameters('force.as[Boolean].?(false)) { force =>
-            onSuccess(create(app, force)) { (plan, app) =>
-              //TODO: post ApiPostEvent
-              complete((StatusCodes.Created, Seq(Deployment(plan)), app))
+    authorized(CreateRunSpec, app, identity) {
+      onSuccess(create) { (plan, app) =>
+        //TODO: post ApiPostEvent
+        complete((StatusCodes.Created, Seq(Deployment(plan)), app))
+      }
+    }
+  }
+
+  private def showApp(appId: PathId, embed: Set[String])(implicit identity: Identity): Route = {
+    val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) ++ Set(
+      // deprecated. For compatibility.
+      AppInfo.Embed.Counts, AppInfo.Embed.Tasks, AppInfo.Embed.LastTaskFailure, AppInfo.Embed.Deployments
+    )
+    onSuccess(appInfoService.selectApp(appId, authzSelector, resolvedEmbed)) {
+      case Some(info) =>
+        authorized(ViewResource, info.app, identity) {
+          complete(Json.obj("app" -> info))
+        }
+      case None =>
+        (StatusCodes.NotFound -> Message.appNotFound(appId))
+        complete(StatusCodes.NotFound -> Message.appNotFound(appId))
+    }
+  }
+
+  val RemainingPathId = RemainingPath.map(_.toString.toRootPath)
+
+  val route: Route = {
+    asLeader {
+      authenticated { implicit identity =>
+        pathEnd {
+          post {
+            (entity(as[AppDefinition]) & parameters('force.as[Boolean].?(false))) { (app, force) =>
+              createApp(app, force)
+            }
+          } ~
+            get {
+              parameters('cmd.?, 'id.?, 'label.?, 'embed.*) { (cmd, id, label, embed) =>
+                listApps(cmd, id, label, embed.toSet)
+              }
+            }
+        } ~
+          get {
+            (path(RemainingPathId) & parameters('embed.*)) { (appId, embed) =>
+              showApp(appId, embed.toSet)
             }
           }
-        }
-      }
-    }
-  }
-
-  private val showApp: Route = {
-    authenticated { implicit identity =>
-      path(RemainingPath) { id =>
-        parameters('embed.*) { embed =>
-          val appId = id.toString().toRootPath
-          val resolvedEmbed = InfoEmbedResolver.resolveApp(embed.toSet) ++ Set(
-            // deprecated. For compatibility.
-            AppInfo.Embed.Counts, AppInfo.Embed.Tasks, AppInfo.Embed.LastTaskFailure, AppInfo.Embed.Deployments
-          )
-          onSuccess(appInfoService.selectApp(appId, authzSelector, resolvedEmbed)) {
-            case Some(info) =>
-              authorized(ViewResource, info.app, identity) {
-                complete(Json.obj("app" -> info))
-              }
-            case None =>
-              (StatusCodes.NotFound -> Message.appNotFound(appId))
-              // complete(StatusCodes.NotFound -> Message.appNotFound(appId))
-              complete("hi")
-          }
-        }
-      }
-    }
-  }
-
-  val apps: Route = {
-    asLeader {
-      pathPrefix("v2" / "apps") {
-        pathEnd {
-          post(createApp) ~ get(listApps)
-        } ~
-          get(showApp)
       }
     }
   }
@@ -140,7 +137,7 @@ class AppsHandler(
     appNormalization(NormalizationConfig(config.availableFeatures, normalizationConfig))(AppNormalization.withCanonizedIds())
 }
 
-object AppsHandler {
+object AppsController {
 
   def appNormalization(config: NormalizationConfig): Normalization[raml.App] = Normalization { app =>
     validateOrThrow(app)(AppValidation.validateOldAppAPI)

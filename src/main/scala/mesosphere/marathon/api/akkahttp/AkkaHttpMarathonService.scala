@@ -2,6 +2,7 @@ package mesosphere.marathon
 package api.akkahttp
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.server.{ Directives, Route }
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.google.common.util.concurrent.AbstractIdleService
@@ -9,14 +10,12 @@ import com.google.inject.Inject
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.chaos.http.HttpConf
 import mesosphere.marathon.api.MarathonHttpService
-import mesosphere.marathon.api.akkahttp.v2.AppsHandler
 import scala.concurrent.Future
-import v2.AppsHandler
 import scala.async.Async._
 
 class AkkaHttpMarathonService @Inject() (
     config: MarathonConf with HttpConf,
-    appsHandler: AppsHandler
+    v2Controller: V2Controller
 )(
     implicit
     actorSystem: ActorSystem) extends AbstractIdleService with MarathonHttpService with StrictLogging {
@@ -24,10 +23,17 @@ class AkkaHttpMarathonService @Inject() (
   implicit val materializer = ActorMaterializer()
   private var handler: Option[Future[Http.ServerBinding]] = None
 
+  val route: Route = {
+    import Directives._
+    pathPrefix("v2") {
+      v2Controller.route
+    }
+  }
+
   override def startUp(): Unit = synchronized {
     if (handler.isEmpty) {
       logger.info(s"Listening via Akka HTTP on ${config.httpPort()}")
-      handler = Some(Http().bindAndHandle(appsHandler.apps, "localhost", config.httpPort()))
+      handler = Some(Http().bindAndHandle(route, "localhost", config.httpPort()))
     } else {
       logger.error("Service already started")
     }
