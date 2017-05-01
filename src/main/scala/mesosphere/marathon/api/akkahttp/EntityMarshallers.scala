@@ -1,5 +1,5 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import akka.http.scaladsl.marshalling.{ Marshaller, ToEntityMarshaller }
 import akka.http.scaladsl.model.MediaTypes.`application/json`

@@ -1,5 +1,5 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.server.Directives._
@@ -76,4 +76,3 @@ object AuthDirectives {
     builder
   }
 }
-

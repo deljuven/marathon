@@ -297,20 +297,6 @@ lazy val marathon = (project in file("."))
     )
   )
 
-lazy val `api` = (project in file("api"))
-  .enablePlugins(GitBranchPrompt, CopyPasteDetector, BasicLintingPlugin)
-  .dependsOn(marathon)
-  .configs(SerialIntegrationTest)
-  .configs(IntegrationTest)
-  .configs(UnstableTest)
-  .configs(UnstableIntegrationTest)
-  .settings(commonSettings : _*)
-  .settings(formatSettings : _*)
-  .settings(
-    name := "api",
-    libraryDependencies ++= Dependencies.api
-  )
-
 lazy val `mesos-simulation` = (project in file("mesos-simulation"))
   .configs(SerialIntegrationTest)
   .configs(IntegrationTest)

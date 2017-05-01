@@ -1,5 +1,5 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
-import mesosphere.marathon.api.v2.AppsHandler
+import mesosphere.marathon.api.akkahttp.v2.AppsHandler
 import mesosphere.marathon.plugin.auth._
 import play.api.libs.json.Json
 

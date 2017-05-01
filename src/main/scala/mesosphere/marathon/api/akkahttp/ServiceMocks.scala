@@ -1,5 +1,5 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import java.time.OffsetDateTime
 

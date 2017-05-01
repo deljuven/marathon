@@ -1,11 +1,12 @@
 package mesosphere.marathon
-package api.v2
+package api.akkahttp.v2
 
 import akka.event.EventStream
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import mesosphere.marathon.api._
+import mesosphere.marathon.api.v2.{ AppNormalization, AppTasksResource, LabelSelectorParsers, InfoEmbedResolver }
+import mesosphere.marathon.api.akkahttp.{ BaseHandler, LeaderDirectives, AuthDirectives, EntityMarshallers }
 import mesosphere.marathon.api.v2.AppsResource.{ NormalizationConfig, authzSelector }
 import mesosphere.marathon.api.v2.Validation.validateOrThrow
 import mesosphere.marathon.api.v2.validation.AppValidation

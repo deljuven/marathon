@@ -1,10 +1,10 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
-import mesosphere.marathon.api.LeaderDirectives.NoLeaderRejection
+import mesosphere.marathon.api.akkahttp.LeaderDirectives.NoLeaderRejection
 
 trait LeaderDirectives {
 

@@ -1,5 +1,5 @@
 package mesosphere.marathon
-package api
+package api.akkahttp
 
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.CustomHeader
