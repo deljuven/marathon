@@ -6,8 +6,8 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import mesosphere.marathon.api.v2.{ AppNormalization, AppTasksResource, LabelSelectorParsers, InfoEmbedResolver }
-import mesosphere.marathon.api.akkahttp.{ Controller, BaseHandler, LeaderDirectives, AuthDirectives, EntityMarshallers }
+import mesosphere.marathon.api.v2.{ AppNormalization, AppTasksResource, InfoEmbedResolver, LabelSelectorParsers }
+import mesosphere.marathon.api.akkahttp.{ AuthDirectives, BaseHandler, Controller, EntityMarshallers, LeaderDirectives }
 import mesosphere.marathon.api.v2.AppsResource.{ NormalizationConfig, authzSelector }
 import mesosphere.marathon.api.v2.Validation.validateOrThrow
 import mesosphere.marathon.api.v2.validation.AppValidation
@@ -16,11 +16,12 @@ import mesosphere.marathon.core.base.Clock
 import mesosphere.marathon.core.deployment.DeploymentPlan
 import mesosphere.marathon.core.group.GroupManager
 import mesosphere.marathon.core.plugin.PluginManager
-import mesosphere.marathon.plugin.auth.{ CreateRunSpec, Identity, ViewResource, Authenticator, Authorizer }
+import mesosphere.marathon.plugin.auth.{ Authenticator, Authorizer, CreateRunSpec, Identity, ViewResource }
 import mesosphere.marathon.raml.AppConversion
 import mesosphere.marathon.state.{ AppDefinition, Identifiable, PathId }
 import play.api.libs.json.Json
 import PathId._
+import mesosphere.marathon.core.election.ElectionService
 
 import scala.concurrent.{ ExecutionContext, Future }
 
@@ -37,7 +38,8 @@ class AppsController(
   val actorSystem: ActorSystem,
   val executionContext: ExecutionContext,
   val authenticator: Authenticator,
-  val authorizer: Authorizer
+  val authorizer: Authorizer,
+  val electionService: ElectionService
 ) extends BaseHandler with LeaderDirectives
     with AuthDirectives with AppConversion with Controller {
 
@@ -101,7 +103,6 @@ class AppsController(
           complete(Json.obj("app" -> info))
         }
       case None =>
-        (StatusCodes.NotFound -> Message.appNotFound(appId))
         complete(StatusCodes.NotFound -> Message.appNotFound(appId))
     }
   }

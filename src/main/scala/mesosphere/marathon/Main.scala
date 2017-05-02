@@ -47,7 +47,7 @@ class MarathonApp(args: Seq[String]) extends AutoCloseable with StrictLogging {
     }(collection.breakOut)
   }
 
-  val cliConf = {
+  val cliConf: AllConf = {
     new AllConf(args ++ envArgs)
   }
 
@@ -82,16 +82,12 @@ class MarathonApp(args: Seq[String]) extends AutoCloseable with StrictLogging {
 
   val actorSystem = ActorSystem("marathon")
 
-  val jettyModules = Seq(
-    new HttpModule(cliConf),
-    new MarathonRestModule)
-  val akkaHttpModules = Seq(
-    new AkkaHttpModule(cliConf))
-
   protected def modules: Seq[Module] = {
-    // TODO - switch this based on a feature flag!!!
-    // jettyModules ++
-    akkaHttpModules ++
+    val httpModules = cliConf.httpServiceBackend() match {
+      case "akkahttp" => Seq(new AkkaHttpModule(cliConf))
+      case _ => Seq(new HttpModule(cliConf), new MarathonRestModule)
+    }
+    httpModules ++
       Seq(
         new MetricsModule,
         new MarathonModule(cliConf, cliConf, actorSystem),
